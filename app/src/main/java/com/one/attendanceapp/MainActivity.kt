@@ -15,11 +15,15 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.LocationServices
+import com.google.firebase.database.FirebaseDatabase
 import com.one.attendanceapp.databinding.ActivityMainBinding
+import com.one.attendanceapp.databinding.LayoutDialogFormBinding
 import java.lang.Math.pow
 import java.lang.Math.toRadians
+import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.*
 
@@ -141,12 +145,17 @@ class MainActivity : AppCompatActivity() {
 //                    Konversi Km ke meter
                     val jarak : Double = distance * 1000
 
-                    binding.tvCheckInSuccess.visibility = View.VISIBLE
-                    binding.tvCheckInSuccess.text = """
+                    Log.d("HASIL", """
                         Lokasi : lat: $currentLatitude, long: $currentLongitude
                         Tujuan : lat: ${getAddresses()[0].latitude}, long: ${getAddresses()[0].longitude}
                         Jarak : $jarak meter
-                        """.trimMargin()
+                        """.trimMargin())
+                    if(jarak < 25.0){
+                        showDialogForm()
+                    }else{
+                        binding.tvCheckInSuccess.visibility = View.VISIBLE
+                        binding.tvCheckInSuccess.text = "Out of range ${jarak.roundToInt()}"
+                    }
 
 
                     stopScanLocation()
@@ -161,9 +170,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showDialogForm() {
+        val dialogForm = LayoutDialogFormBinding.inflate(layoutInflater)
+
+        AlertDialog.Builder(this)
+            .setView(dialogForm.root)
+            .setCancelable(false)
+            .setPositiveButton("Submit") { dialog, _ ->
+                val name = dialogForm.etName.text.toString()
+                Log.d("NAMA", name)
+                inputDatatoFireBase(name)
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel"){dialog, which ->
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    private fun inputDatatoFireBase(name: String) {
+        val user = User(name, getCurrentDateTime())
+
+        val database = FirebaseDatabase.getInstance("https://attendance-app-dc359-default-rtdb.asia-southeast1.firebasedatabase.app/")
+        val attendanceRef = database.getReference("log_attendance")
+
+        attendanceRef.child(name).setValue(user)
+            .addOnSuccessListener {
+                binding.tvCheckInSuccess.visibility = View.VISIBLE
+                binding.tvCheckInSuccess.text = "Check-In Success"
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "${it.message}", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun getCurrentDateTime() : String {
+        val currentDateTime = Calendar.getInstance().time
+        val dateFormat = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.getDefault())
+
+        return dateFormat.format(currentDateTime)
+    }
+
     private fun getAddresses() : List<Address>{
-//        val destination = "adam cell kambu"
-        val destination = "Fakultas Matematika dan Ilmu Pengetahuan Alam (F-MIPA) UHO"
+        val destination = "adam cell kambu"
+//        val destination = "Fakultas Matematika dan Ilmu Pengetahuan Alam (F-MIPA) UHO"
         val geocode = Geocoder(this, Locale.getDefault())
 
         return geocode.getFromLocationName(destination, 100)
